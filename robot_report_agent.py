@@ -1,11 +1,11 @@
 """
-Robot Report Daily News Agent
-==============================
-Récupère les dernières news du RSS feed de The Robot Report,
-les résume via l'API Gemini (Google), et les envoie par mail.
+Robotics News Agent
+====================
+Agrège les flux RSS de plusieurs sources robotique/IA,
+résume via Gemini et envoie un digest quotidien par mail.
 
 Dépendances : pip install feedparser google-genai python-dotenv
-Configuration : renseigner les variables dans la section CONFIG ci-dessous.
+Configuration : fichier .env (voir .env.example)
 
 Planification (Windows) : utiliser le Planificateur de tâches
 """
@@ -33,27 +33,33 @@ CONFIG = {
     "smtp_port": 587,
     "email_from": os.getenv("EMAIL_FROM"),
     "email_to": os.getenv("EMAIL_TO"),
-    "email_subject": "🤖 Robot Report Digest — {date}",
-    "rss_url": "https://www.therobotreport.com/feed/",
+    "email_subject": "🤖 Robotics Digest — {date}",
+    "rss_feeds": [
+        {"url": "https://www.therobotreport.com/feed/", "source": "The Robot Report"},
+        {"url": "https://techcrunch.com/category/robotics/feed/", "source": "TechCrunch Robotics"},
+        {"url": "https://www.reddit.com/r/robotics/.rss", "source": "Reddit r/robotics"},
+    ],
     "hours_back": 24,
-    "max_articles": 10,
+    "max_articles_per_feed": 10,
 }
 
 # ─────────────────────────────────────────────
 
 
-def fetch_recent_articles(rss_url: str, hours_back: int, max_articles: int) -> list:
-    """Parse le flux RSS et retourne les articles récents."""
-    feed = feedparser.parse(rss_url)
-    if feed.bozo:
-        raise ValueError(f"Erreur de parsing RSS : {feed.bozo_exception}")
+def fetch_from_feed(url: str, source: str, hours_back: int, max_articles: int) -> list:
+    """Parse un flux RSS et retourne les articles récents avec leur source."""
+    try:
+        feed = feedparser.parse(url)
+    except Exception as e:
+        print(f"  [!] Impossible de lire {source} : {e}")
+        return []
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours_back)
     articles = []
 
     for entry in feed.entries:
         if hasattr(entry, "published_parsed") and entry.published_parsed:
-            pub_dt = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+            pub_dt = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)  # type: ignore[misc]
         else:
             pub_dt = datetime.now(timezone.utc)
 
@@ -61,6 +67,7 @@ def fetch_recent_articles(rss_url: str, hours_back: int, max_articles: int) -> l
             continue
 
         articles.append({
+            "source": source,
             "title": entry.get("title", "Sans titre"),
             "link": entry.get("link", ""),
             "published": pub_dt.strftime("%d/%m/%Y %H:%M UTC"),
@@ -72,6 +79,22 @@ def fetch_recent_articles(rss_url: str, hours_back: int, max_articles: int) -> l
             break
 
     return articles
+
+
+def fetch_all_articles(config: dict) -> list:
+    """Agrège les articles de tous les flux RSS configurés."""
+    all_articles = []
+    for feed in config["rss_feeds"]:
+        print(f"  -> {feed['source']}...")
+        articles = fetch_from_feed(
+            feed["url"],
+            feed["source"],
+            config["hours_back"],
+            config["max_articles_per_feed"],
+        )
+        print(f"     {len(articles)} article(s)")
+        all_articles.extend(articles)
+    return all_articles
 
 
 def summarize_with_gemini(articles: list, api_key: str, model_name: str) -> str:
@@ -86,6 +109,7 @@ def summarize_with_gemini(articles: list, api_key: str, model_name: str) -> str:
         tags = ", ".join(a["tags"]) if a["tags"] else "—"
         articles_text += (
             f"\n---\nArticle {i}\n"
+            f"Source : {a['source']}\n"
             f"Titre : {a['title']}\n"
             f"Date : {a['published']}\n"
             f"Tags : {tags}\n"
@@ -94,22 +118,29 @@ def summarize_with_gemini(articles: list, api_key: str, model_name: str) -> str:
         )
 
     prompt = f"""Tu es un assistant spécialisé en robotique et en IA.
-Voici {len(articles)} articles publiés aujourd'hui par The Robot Report.
+Voici {len(articles)} articles issus de plusieurs sources (The Robot Report, TechCrunch, Reddit r/robotics).
 
 {articles_text}
 
+RÈGLES IMPORTANTES avant de générer le digest :
+1. DÉDUPLICATION : si plusieurs articles traitent du même sujet ou du même produit/événement,
+   ne garde qu'un seul bloc (le plus informatif). Mentionne "(aussi couvert par X)" dans le méta si besoin.
+2. FILTRAGE Reddit : ignore les posts Reddit sans substance réelle (questions basiques,
+   discussions d'opinion sans info concrète, humour). Ne garde que les posts avec une vraie info.
+3. LANGUE : tout le contenu généré doit être en français.
+
 Génère un digest quotidien en HTML (fragment, sans <html>/<body>) avec :
-1. Un titre <h2> "🤖 Robot Report — {len(articles)} articles du jour"
-2. Pour chaque article, un bloc <div class="article"> contenant :
+1. Un titre <h2> "🤖 Robotics Digest — {len(articles)} sources analysées"
+2. Pour chaque article retenu, un bloc <div class="article"> contenant :
    - <h3> avec le titre (lié à l'URL, target="_blank")
-   - <p class="meta"> avec la date et les tags
+   - <p class="meta"> avec la source, la date et les tags
    - <p class="summary"> : 2-3 phrases synthétisant l'essentiel en français,
      en mettant en avant l'innovation ou l'enjeu principal
 3. Une section <div class="trends"> "📊 Tendances du jour" listant en 3-5 bullets
    les grands thèmes qui ressortent de l'ensemble des articles.
 
 Style inline CSS uniquement (email-compatible). Utilise une palette sobre :
-fond blanc, texte #222, liens #1a6cba, badges tags gris clair (#eee).
+fond blanc, texte #222, liens #1a6cba, badges source/tags gris clair (#eee).
 Chaque article séparé par une fine ligne horizontale.
 Ne génère que le HTML, sans commentaires ni markdown."""
 
@@ -153,7 +184,7 @@ def save_debug_output(html: str, articles: list) -> None:
     full_html = f"""<!DOCTYPE html>
 <html lang="fr"><head>
 <meta charset="utf-8">
-<title>Robot Report Digest</title>
+<title>Robotics Digest</title>
 </head><body style="font-family:sans-serif;max-width:700px;margin:auto;padding:20px">
 {html}
 <hr>
@@ -170,29 +201,22 @@ def save_debug_output(html: str, articles: list) -> None:
 
 def main():
     print(f"\n{'='*50}")
-    print(f"  Robot Report Agent — {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    print(f"  Robotics News Agent — {datetime.now().strftime('%d/%m/%Y %H:%M')}")
     print(f"{'='*50}")
 
     # 1. Récupération des articles
-    print(f"\n[RSS] Récupération du flux ({CONFIG['hours_back']}h)...")
-    try:
-        articles = fetch_recent_articles(
-            CONFIG["rss_url"],
-            CONFIG["hours_back"],
-            CONFIG["max_articles"],
-        )
-    except Exception as e:
-        print(f"  ERREUR RSS : {e}")
-        return
-
-    print(f"  OK {len(articles)} article(s) trouvé(s)")
+    sources = [f["source"] for f in CONFIG["rss_feeds"]]
+    print(f"\n[RSS] Récupération ({CONFIG['hours_back']}h) — {len(sources)} sources...")
+    articles = fetch_all_articles(CONFIG)
+    print(f"  Total : {len(articles)} article(s)")
 
     if not articles:
         print("  Aucun nouvel article. Fin du script.")
         return
 
     for i, a in enumerate(articles, 1):
-        print(f"   {i}. {a['title'][:70]}..." if len(a['title']) > 70 else f"   {i}. {a['title']}")
+        title = a['title'][:70] + "..." if len(a['title']) > 70 else a['title']
+        print(f"   {i}. [{a['source']}] {title}")
 
     # 2. Résumé via Gemini
     print(f"\n[Gemini] Génération du digest ({CONFIG['gemini_model']})...")
