@@ -117,32 +117,172 @@ def summarize_with_gemini(articles: list, api_key: str, model_name: str) -> str:
             f"Résumé brut : {a['summary'][:600]}\n"
         )
 
-    prompt = f"""Tu es un assistant spécialisé en robotique et en IA.
+    prompt = f""" Tu es un rédacteur de veille spécialisé en robotique et IA.
+Ta mission est de produire une note de veille quotidienne courte, sélective, premium et utile.
 Voici {len(articles)} articles issus de plusieurs sources (The Robot Report, TechCrunch, Reddit r/robotics).
 
+CONTENUS :
 {articles_text}
 
-RÈGLES IMPORTANTES avant de générer le digest :
-1. DÉDUPLICATION : si plusieurs articles traitent du même sujet ou du même produit/événement,
-   ne garde qu'un seul bloc (le plus informatif). Mentionne "(aussi couvert par X)" dans le méta si besoin.
-2. FILTRAGE Reddit : ignore les posts Reddit sans substance réelle (questions basiques,
-   discussions d'opinion sans info concrète, humour). Ne garde que les posts avec une vraie info.
-3. LANGUE : tout le contenu généré doit être en français.
+OBJECTIF
+Produire un email HTML premium, très lisible, très concis, qui ressemble à une note d’analyste.
+Le rendu ne doit jamais ressembler à une liste brute d’articles ou à un flux RSS.
 
-Génère un digest quotidien en HTML (fragment, sans <html>/<body>) avec :
-1. Un titre <h2> "🤖 Robotics Digest — {len(articles)} sources analysées"
-2. Pour chaque article retenu, un bloc <div class="article"> contenant :
-   - <h3> avec le titre (lié à l'URL, target="_blank")
-   - <p class="meta"> avec la source, la date et les tags
-   - <p class="summary"> : 2-3 phrases synthétisant l'essentiel en français,
-     en mettant en avant l'innovation ou l'enjeu principal
-3. Une section <div class="trends"> "📊 Tendances du jour" listant en 3-5 bullets
-   les grands thèmes qui ressortent de l'ensemble des articles.
+RÈGLES DE SÉLECTION
+1. Garde au maximum 5 sujets au total.
+2. Priorité absolue à The Robot Report, considéré comme la meilleure source.
+3. Garde uniquement les articles réellement intéressants.
+4. Pour The Robot Report, conserve seulement les sujets qui apportent une information importante, concrète ou structurante :
+   - lancement ou évolution produit significative
+   - acquisition, partenariat ou mouvement stratégique
+   - certification, conformité, réglementation
+   - dataset, framework, publication technique structurante
+   - déploiement industriel concret
+   - preuve réelle, chiffre, traction, usage
+5. Pour les sites tech généralistes, garde au maximum 1 article, uniquement s’il est vraiment fort.
+6. Pour Reddit, garde au maximum 1 post, uniquement s’il contient une vraie substance technique, une démo crédible ou un prototype notable.
+7. Exclure Reddit si le contenu est :
+   - hobbyiste sans portée réelle
+   - question ouverte
+   - opinion
+   - humour
+   - gadget
+   - bricolage sans résultat significatif
+8. Déduplique les sujets proches. Si plusieurs contenus parlent du même sujet, ne garde que la version la plus informative.
+9. Il est acceptable de ne retenir que 2, 3 ou 4 sujets si le reste est faible. Ne remplis jamais artificiellement.
 
-Style inline CSS uniquement (email-compatible). Utilise une palette sobre :
-fond blanc, texte #222, liens #1a6cba, badges source/tags gris clair (#eee).
-Chaque article séparé par une fine ligne horizontale.
-Ne génère que le HTML, sans commentaires ni markdown."""
+CRITÈRES DE JUGEMENT
+Pour chaque contenu, évalue implicitement :
+- importance réelle
+- caractère concret / niveau de preuve
+- portée sectorielle
+- originalité
+- qualité de la source
+
+RÈGLES DE RÉDACTION
+1. Tout doit être en français.
+2. Réécris chaque titre pour qu’il soit court, naturel, propre et éditorial.
+3. Le texte doit être direct et dense.
+4. Utilise le moins de mots possible.
+5. Pas de remplissage, pas de tournures creuses, pas de paraphrase inutile.
+6. Chaque sujet doit tenir en :
+   - un titre
+   - un résumé très court en 2 phrases maximum
+7. Le résumé doit dire :
+   - ce qui s’est passé
+   - pourquoi cela mérite d’être retenu aujourd’hui
+8. Ajoute un bloc d’ouverture “Ce qu’il faut retenir” avec 2 à 4 bullets maximum.
+9. N’ajoute aucune section “Tendances du jour”.
+10. Le header doit indiquer “{len(articles)} articles analysés”, jamais “sources analysées”.
+
+CONTRAINTES HTML
+1. Génère uniquement un fragment HTML.
+2. N’ajoute jamais de balises <html>, <head> ou <body>.
+3. N’ajoute aucun commentaire.
+4. N’ajoute aucun markdown.
+5. Utilise uniquement du CSS inline.
+6. Respecte exactement la structure HTML ci-dessous.
+7. Remplace seulement les contenus textuels et répète le bloc <tr class="item-row"> pour chaque sujet retenu.
+8. Le rendu doit être email-compatible, premium, sobre, minimaliste, avec une esthétique inspirée d’Apple :
+   - fond clair
+   - espace généreux
+   - hiérarchie nette
+   - texte foncé
+   - gris subtil
+   - bleu discret pour les liens
+   - coins arrondis
+   - fines séparations
+9. N’utilise pas d’emojis dans les titres d’articles.
+10. Un seul emoji est autorisé : 🤖 dans le header.
+
+HTML ATTENDU — À RESPECTER STRICTEMENT
+
+<div style="margin:0;padding:24px 0;background-color:#f5f5f7;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;background-color:#f5f5f7;margin:0;padding:0;width:100%;">
+    <tr>
+      <td align="center" style="padding:0 16px;">
+        <table role="presentation" width="680" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;width:680px;max-width:680px;background:#ffffff;border:1px solid #e5e5e7;border-radius:20px;">
+          
+          <tr>
+            <td style="padding:32px 32px 20px 32px;">
+              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:28px;line-height:32px;font-weight:700;color:#111111;letter-spacing:-0.02em;margin:0 0 8px 0;">
+                🤖 Robotics Digest
+              </div>
+              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:13px;line-height:18px;color:#6e6e73;margin:0;">
+                [DATE DU DIGEST] · {len(articles)} articles analysés · [X] retenus
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 32px 24px 32px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;width:100%;background:#f9f9fb;border:1px solid #ececf1;border-radius:16px;">
+                <tr>
+                  <td style="padding:18px 20px 18px 20px;">
+                    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:18px;font-weight:600;color:#111111;margin:0 0 10px 0;">
+                      Ce qu’il faut retenir
+                    </div>
+                    <ul style="margin:0;padding-left:18px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:21px;color:#222222;">
+                      [INSÉRER 2 À 4 <li> ULTRA CONCIS]
+                    </ul>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 32px 8px 32px;">
+              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:12px;line-height:16px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#6e6e73;">
+                Sélection
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 32px 32px 32px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;">
+                
+                <tr class="item-row">
+                  <td style="padding:18px 0;border-top:1px solid #ececf1;">
+                    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:12px;line-height:16px;color:#6e6e73;margin:0 0 6px 0;">
+                      [SOURCE] · [DATE]
+                    </div>
+                    <div style="margin:0 0 8px 0;">
+                      <a href="[URL]" target="_blank" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:20px;line-height:26px;font-weight:600;letter-spacing:-0.01em;color:#111111;text-decoration:none;">
+                        [TITRE RÉÉCRIT]
+                      </a>
+                    </div>
+                    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:22px;color:#222222;margin:0 0 10px 0;">
+                      [RÉSUMÉ EN 2 PHRASES MAXIMUM]
+                    </div>
+                    <div>
+                      <a href="[URL]" target="_blank" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:13px;line-height:18px;font-weight:500;color:#1a6cba;text-decoration:none;">
+                        Lire l’article →
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</div>
+
+RÈGLES FINALES DE SORTIE
+- Génère uniquement le HTML final.
+- Respecte exactement la structure fournie.
+- Répète seulement les blocs nécessaires pour les articles retenus.
+- Ne crée pas d’autres sections.
+- Ne mets pas de tags ou badges inutiles.
+- Ne dépasse pas 5 sujets.
+- Si seuls 2 ou 3 sujets sont vraiment bons, n’en affiche que 2 ou 3.
+"""
 
     response = client.models.generate_content(model=model_name, contents=prompt)
     return response.text
@@ -178,8 +318,7 @@ def send_email(html_body: str, config: dict) -> None:
 
 def save_debug_output(html: str, articles: list) -> None:
     """Sauvegarde le résultat localement pour aperçu."""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"digest_{timestamp}.html"
+    filename = "digest_latest.html"
 
     full_html = f"""<!DOCTYPE html>
 <html lang="fr"><head>
