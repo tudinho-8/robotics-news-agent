@@ -32,7 +32,7 @@ CONFIG = {
     "smtp_host": "smtp.gmail.com",
     "smtp_port": 587,
     "email_from": os.getenv("EMAIL_FROM"),
-    "email_to": os.getenv("EMAIL_TO"),
+    "email_to": [a.strip() for a in os.getenv("EMAIL_TO", "").split(",") if a.strip()],
     "email_subject": "🤖 Robotics Digest — {date}",
     "rss_feeds": [
         {"url": "https://www.therobotreport.com/feed/", "source": "The Robot Report"},
@@ -134,13 +134,14 @@ RÈGLES DE SÉLECTION
 3. Garde uniquement les articles réellement intéressants.
 4. Pour The Robot Report, conserve seulement les sujets qui apportent une information importante, concrète ou structurante :
    - lancement ou évolution produit significative
+   - levée de fonds
    - acquisition, partenariat ou mouvement stratégique
    - certification, conformité, réglementation
    - dataset, framework, publication technique structurante
    - déploiement industriel concret
    - preuve réelle, chiffre, traction, usage
-5. Pour les sites tech généralistes, garde au maximum 1 article, uniquement s’il est vraiment fort.
-6. Pour Reddit, garde au maximum 1 post, uniquement s’il contient une vraie substance technique, une démo crédible ou un prototype notable.
+5. Pour Tech Crunch, garde entre 0 et 2 article, uniquement s’ils sont vraiment forts, ou c'est une levée de fonds/un m&a intéressant
+6. Pour Reddit, garde entre 0 et 2 posts max, uniquement s’il contient une info sur une levée, une news importante et novatrice, une news qui te parait factuelle et non biaisée.
 7. Exclure Reddit si le contenu est :
    - hobbyiste sans portée réelle
    - question ouverte
@@ -296,7 +297,7 @@ def send_email(html_body: str, config: dict) -> None:
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = config["email_from"]
-    msg["To"] = config["email_to"]
+    msg["To"] = ", ".join(config["email_to"])
 
     text_part = MIMEText(
         "Votre client mail ne supporte pas le HTML. "
@@ -313,7 +314,7 @@ def send_email(html_body: str, config: dict) -> None:
         server.ehlo()
         server.starttls()
         server.login(config["smtp_user"], config["smtp_password"])
-        server.sendmail(config["email_from"], config["email_to"], msg.as_string())
+        server.sendmail(config["email_from"], config["email_to"], msg.as_string())  # email_to est une liste
 
 
 def save_debug_output(html: str, articles: list) -> None:
@@ -374,7 +375,7 @@ def main():
     save_debug_output(html_digest, articles)
 
     # 4. Envoi par mail
-    print(f"\n[Mail] Envoi à {CONFIG['email_to']}...")
+    print(f"\n[Mail] Envoi à {len(CONFIG['email_to'])} destinataire(s) : {', '.join(CONFIG['email_to'])}...")
     try:
         send_email(html_digest, CONFIG)
         print("  OK Mail envoyé avec succès")
