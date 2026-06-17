@@ -286,7 +286,21 @@ RÈGLES FINALES DE SORTIE
 """
 
     response = client.models.generate_content(model=model_name, contents=prompt)
-    return response.text
+    return clean_html_fragment(response.text or "")
+
+
+def clean_html_fragment(html: str) -> str:
+    """Remove Markdown fences that models sometimes add around HTML."""
+    cleaned = html.strip()
+    lines = cleaned.splitlines()
+
+    if lines and lines[0].strip().startswith("```"):
+        lines = lines[1:]
+
+    if lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+
+    return "\n".join(lines).strip()
 
 
 def send_email(html_body: str, config: dict) -> None:
